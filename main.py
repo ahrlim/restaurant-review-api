@@ -1,12 +1,6 @@
-from typing import Annotated
+from fastapi import FastAPI
 
-from fastapi import Depends, FastAPI, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-
-import models
-from database import Base, engine, get_db
+from database import Base, engine
 from routers import restaurants, visits, reviews
 
 
