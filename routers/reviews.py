@@ -10,36 +10,48 @@ from schemas import ReviewCreate, ReviewResponse, ReviewUpdate
 
 router = APIRouter()
 
+@router.get("",response_model=list[ReviewResponse])
+def get_reviews(db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Review))
+    reviews = result.scalars().all()
+    return reviews
+
 
 @router.post(
-    "/{visit_id}/review",
+    "",
     response_model=ReviewResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def add_review(visit_id: int, review: ReviewCreate, db: Annotated[Session, Depends(get_db)]):
-    # Check if visit_id exists
-    result = db.execute(select(models.Visit).where(models.Visit.id == visit_id))
-    visit = result.scalars().first()
-    if not visit:
+def create_review(review: ReviewCreate, db: Annotated[Session, Depends(get_db)]):
+    # Check if the user exists
+    result = db.execute(select(models.User).where(models.User.id == review.user_id))
+    user = result.scalars().first()
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Visit not found"
+            detail="User not found",
         )
     
-    # Check if review already exists for this visit_id
-    result = db.execute(select(models.Review).where(models.Review.visit_id == visit_id))
+    # Check if the user already wrote a review for the same restaurant
+    result = db.execute(
+        select(models.Review).where(
+            models.Review.user_id == review.user_id,
+            models.Review.restaurant_name == review.restaurant_name
+        )
+    )
     existing_review = result.scalars().first()
 
     if existing_review:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Review already exists for this visit", 
+            detail="You already have a review for this restaurant",
         )
-
+    
     new_review = models.Review(
-        visit_id=visit_id,
-        rating=review.rating,
-        notes=review.notes,
+        restaurant_name=review.restaurant_name,
+        review=review.review,
+        user_id=review.user_id,
+        date_visited=review.date_visited,
     )
 
     db.add(new_review)
@@ -48,9 +60,9 @@ def add_review(visit_id: int, review: ReviewCreate, db: Annotated[Session, Depen
     return new_review
 
 
-@router.get("/{visit_id}/review",response_model=ReviewResponse)
-def get_review(visit_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.Review).where(models.Review.visit_id == visit_id))
+@router.get("/{review_id}",response_model=ReviewResponse)
+def get_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Review).where(models.Review.id == review_id))
     review = result.scalars().first()
     if not review:
         raise HTTPException(
@@ -60,13 +72,13 @@ def get_review(visit_id: int, db: Annotated[Session, Depends(get_db)]):
     return review
 
 
-@router.patch("/{visit_id}/review", response_model=ReviewResponse)
+@router.patch("/{review_id}", response_model=ReviewResponse)
 def update_review(
-    visit_id: int,
+    review_id: int,
     review_data: ReviewUpdate,
     db: Annotated[Session, Depends(get_db)]
 ):
-    result = db.execute(select(models.Review).where(models.Review.visit_id == visit_id))
+    result = db.execute(select(models.Review).where(models.Review.id == review_id))
     review = result.scalars().first()
     if not review:
         raise HTTPException(
@@ -75,12 +87,35 @@ def update_review(
         )
     
     update_data = review_data.model_dump(exclude_unset=True)
-    
+
     if len(update_data) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No data is given to update"
         )
+
+    if "restaurant_name" in update_data and update_data["restaurant_name"] is None:
+        raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="restaurant_name cannot be null",
+        )
+
+    # Check if the user already wrote a review for the same restaurant
+    new_name = update_data.get("restaurant_name")
+
+    if new_name is not None and new_name != review.restaurant_name:
+        result = db.execute(
+            select(models.Review).where(
+                models.Review.user_id == review.user_id,
+                models.Review.restaurant_name == new_name,
+                models.Review.id != review.id,
+            )
+        )
+        if result.scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already have a review for this restaurant",
+            )
 
     no_changes = all(
         getattr(review, field) == value
@@ -97,9 +132,9 @@ def update_review(
     return review
 
 
-@router.delete("/{visit_id}/review", status_code=status.HTTP_204_NO_CONTENT)
-def delete_review(visit_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.Review).where(models.Review.visit_id == visit_id))
+@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Review).where(models.Review.id == review_id))
     review = result.scalars().first()
     if not review:
         raise HTTPException(

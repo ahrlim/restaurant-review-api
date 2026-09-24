@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <article>
+    <h1>{{ review.restaurant_name }}</h1>
+    <p>Reviewer: {{ review.reviewer.username }}</p>
+
+    <p>Visit Date: {{ review.date_visited }}</p>
+
+    <p style="white-space: pre-wrap;">{{ review.review }}</p>
+  </article>
+
+  <a href="{{ url_for('home') }}">Back to List</a>
+{% endblock content %}

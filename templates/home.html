@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <h1>Restaurant Reviews</h1>
+
+  {% for review in reviews %}
+    <article>
+      <h2>{{ review.restaurant_name }}</h2>
+      <p>Reviewer: {{ review.reviewer.username }}</p>
+      <p>Visit Date: {{ review.date_visited }}</p>
+      <p style="white-space: pre-wrap;">{{ review.review }}</p>
+    </article>
+  {% else %}
+    <p>No reviews yet.</p>
+  {% endfor %}
+{% endblock content %}
