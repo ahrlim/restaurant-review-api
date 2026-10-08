@@ -1,16 +1,17 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <h1>Restaurant Reviews</h1>
+  <h1>Reviews by {{ user.username }}</h1>
 
   {% for review in reviews %}
     <article>
       <h2><a href="{{ url_for('review_page', review_id=review.id) }}">{{ review.restaurant_name }}</a></h2>
-      <p>Reviewer: {{ review.reviewer.username }}</p>
       <p>Visit Date: {{ review.date_visited.strftime('%Y-%m-%d') if review.date_visited else '-' }}</p>
-      <p style="white-space: pre-wrap;">{{ review.review }}</p>
+      <p style="white-space: pre-wrap;">{{ review.review or 'No review text.' }}</p>
     </article>
   {% else %}
-    <p>No reviews yet.</p>
+    <p>No reviews yet for {{ user.username }}.</p>
   {% endfor %}
+
+  <a href="{{ url_for('home') }}">Back to Review List</a>
 {% endblock content %}

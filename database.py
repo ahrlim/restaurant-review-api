@@ -1,16 +1,20 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./restaurant-review-api.db"
+SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./restaurant-review-api.db"
 
 # engine is our connection to the database
-engine = create_engine(
+engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
 )
 
 # create a session (= a transaction with the database), each request has its own session
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
 class Base(DeclarativeBase):
@@ -18,7 +22,7 @@ class Base(DeclarativeBase):
 
 # a dependency function provides sessions to our routes
 # use it with context manager
-def get_db():
-    with SessionLocal() as db:
-        yield db
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
 

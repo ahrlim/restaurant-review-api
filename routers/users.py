@@ -1,8 +1,13 @@
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, selectinload
 
 import models
 from database import get_db
@@ -18,8 +23,8 @@ router = APIRouter()
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(
+async def create_user(user: UserCreate, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
         select(models.User).where(models.User.username == user.username),
     )
     existing_user = result.scalars().first()
@@ -32,14 +37,14 @@ def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
         username=user.username,
     )
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     return new_user
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(
+async def get_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
         select(models.User).where(models.User.id == user_id),
     )
     user = result.scalars().first()
@@ -49,26 +54,31 @@ def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @router.get("/{user_id}/reviews", response_model=list[ReviewResponse])
-def get_user_posts(user_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.User).where(models.User.id == user_id))
+async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    result = db.execute(select(models.Review).where(models.Review.user_id == user_id))
+    result = await db.execute(
+        select(models.Review)
+        .options(selectinload(models.Review.reviewer))
+        .where(models.Review.user_id == user_id)
+        .order_by(models.Review.date_visited.desc()),
+    )
     reviews = result.scalars().all()
     return reviews
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-def update_user(
+async def update_user(
     user_id: int,
     user_update: UserUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(
@@ -77,7 +87,7 @@ def update_user(
         )
 
     if user_update.username is not None and user_update.username != user.username:
-        result = db.execute(
+        result = await db.execute(
             select(models.User).where(models.User.username == user_update.username),
         )
         existing_user = result.scalars().first()
@@ -90,14 +100,14 @@ def update_user(
     if user_update.username is not None:
         user.username = user_update.username
 
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.User).where(models.User.id == user_id))
+async def delete_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(
@@ -105,6 +115,6 @@ def delete_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
             detail="User not found",
         )
 
-    db.delete(user)
-    db.commit()
+    await db.delete(user)
+    await db.commit()
 

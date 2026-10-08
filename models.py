@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from sqlalchemy import Date
 from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +39,6 @@ class Review(Base):
         nullable=False,
         index=True,
     )
-    date_visited: Mapped[datetime | None] = mapped_column(default=lambda: datetime.now(UTC))
+    date_visited: Mapped[date | None] = mapped_column(Date, default=lambda: datetime.now(UTC).date())
 
     reviewer: Mapped[User] = relationship(back_populates="reviews")

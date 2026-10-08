@@ -1,7 +1,7 @@
 # define what to accept and return from API
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,7 +27,7 @@ class UserUpdate(BaseModel):
 class ReviewBase(BaseModel):
     restaurant_name: str = Field(min_length=1, max_length=100)
     review: str | None = Field(default=None, min_length=1, max_length=500)
-    date_visited: datetime | None = Field(default_factory=datetime.now)
+    date_visited: date | None = Field(default_factory=lambda: datetime.now(UTC).date())
 
 
 class ReviewCreate(ReviewBase):
@@ -37,7 +37,7 @@ class ReviewCreate(ReviewBase):
 class ReviewUpdate(BaseModel):
     restaurant_name: str | None = Field(default=None, min_length=1, max_length=100)
     review: str | None = Field(default=None, min_length=1, max_length=500)
-    date_visited: datetime | None = Field(default_factory=datetime.now)
+    date_visited: date | None = Field(default_factory=lambda: datetime.now(UTC).date())
 
 class ReviewResponse(ReviewBase):
     model_config = ConfigDict(from_attributes=True)

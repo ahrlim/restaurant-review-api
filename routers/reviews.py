@@ -2,7 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, selectinload
 
 import models
 from database import get_db
@@ -10,21 +11,15 @@ from schemas import ReviewCreate, ReviewResponse, ReviewUpdate
 
 router = APIRouter()
 
-@router.get("",response_model=list[ReviewResponse])
-def get_reviews(db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.Review))
-    reviews = result.scalars().all()
-    return reviews
-
 
 @router.post(
     "",
     response_model=ReviewResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_review(review: ReviewCreate, db: Annotated[Session, Depends(get_db)]):
+async def create_review(review: ReviewCreate, db: Annotated[AsyncSession, Depends(get_db)]):
     # Check if the user exists
-    result = db.execute(select(models.User).where(models.User.id == review.user_id))
+    result = await db.execute(select(models.User).where(models.User.id == review.user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(
@@ -33,10 +28,11 @@ def create_review(review: ReviewCreate, db: Annotated[Session, Depends(get_db)])
         )
     
     # Check if the user already wrote a review for the same restaurant
-    result = db.execute(
-        select(models.Review).where(
+    result = await db.execute(
+        select(models.Review)
+        .where(
             models.Review.user_id == review.user_id,
-            models.Review.restaurant_name == review.restaurant_name
+            models.Review.restaurant_name == review.restaurant_name,
         )
     )
     existing_review = result.scalars().first()
@@ -55,14 +51,29 @@ def create_review(review: ReviewCreate, db: Annotated[Session, Depends(get_db)])
     )
 
     db.add(new_review)
-    db.commit()
-    db.refresh(new_review)
+    await db.commit()
+    await db.refresh(new_review, attribute_names=["reviewer"])
     return new_review
 
 
+@router.get("",response_model=list[ReviewResponse])
+async def get_reviews(db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.Review)
+        .options(selectinload(models.Review.reviewer))
+        .order_by(models.Review.date_visited.desc()),
+    )
+    reviews = result.scalars().all()
+    return reviews
+
+
 @router.get("/{review_id}",response_model=ReviewResponse)
-def get_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.Review).where(models.Review.id == review_id))
+async def get_review(review_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(models.Review)
+        .options(selectinload(models.Review.reviewer))
+        .where(models.Review.id == review_id),
+    )
     review = result.scalars().first()
     if not review:
         raise HTTPException(
@@ -73,12 +84,16 @@ def get_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @router.patch("/{review_id}", response_model=ReviewResponse)
-def update_review(
+async def update_review(
     review_id: int,
     review_data: ReviewUpdate,
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    result = db.execute(select(models.Review).where(models.Review.id == review_id))
+    result = await db.execute(
+        select(models.Review)
+        .options(selectinload(models.Review.reviewer))
+        .where(models.Review.id == review_id),
+    )
     review = result.scalars().first()
     if not review:
         raise HTTPException(
@@ -104,12 +119,13 @@ def update_review(
     new_name = update_data.get("restaurant_name")
 
     if new_name is not None and new_name != review.restaurant_name:
-        result = db.execute(
-            select(models.Review).where(
+        result = await db.execute(
+            select(models.Review)
+            .where(
                 models.Review.user_id == review.user_id,
                 models.Review.restaurant_name == new_name,
                 models.Review.id != review.id,
-            )
+            ),
         )
         if result.scalars().first():
             raise HTTPException(
@@ -127,14 +143,14 @@ def update_review(
     for field, value in update_data.items():
         setattr(review, field, value)
 
-    db.commit()
-    db.refresh(review)
+    await db.commit()
+    await db.refresh(review)
     return review
 
 
 @router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.Review).where(models.Review.id == review_id))
+async def delete_review(review_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.Review).where(models.Review.id == review_id))
     review = result.scalars().first()
     if not review:
         raise HTTPException(
@@ -142,5 +158,6 @@ def delete_review(review_id: int, db: Annotated[Session, Depends(get_db)]):
             detail="Review not found"
         )
 
-    db.delete(review)
-    db.commit()
+    await db.delete(review)
+    await db.commit()
+
