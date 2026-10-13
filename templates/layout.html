@@ -34,9 +34,26 @@
 
   <aside>
     <h2>Navigation</h2>
-    <button data-bs-toggle="modal"
-    class="btn btn-primary"
-    data-bs-target="#createReviewModal">New Review</button>
+    <div class="d-flex flex-column gap-2">
+      <!-- Shown when logged in (hidden by default, shown via JS) -->
+      <div id="loggedInNav" class="d-none flex-column gap-2">
+          <button class="btn btn-primary"
+                  type="button"
+                  data-bs-toggle="modal"
+                  data-bs-target="#createReviewModal">Create Review</button>
+          <span id="usernameDisplay" class="navbar-text"></span>
+          <button class="btn btn-outline-secondary"
+                  type="button"
+                  id="logoutBtn">Logout</button>
+      </div>
+      <!-- Shown when logged out -->
+      <div id="loggedOutNav" class="d-none flex-column gap-2">
+          <a class="btn btn-outline-primary"
+              href="{{ url_for("login") }}">Login</a>
+          <a class="btn btn-primary"
+              href="{{ url_for("register") }}">Register</a>
+      </div>
+    </div>
   </aside>
 
   <footer>"Where footer is."</footer>
@@ -119,12 +136,47 @@
             crossorigin="anonymous">
   </script>
 
+
+  <!-- Auth State Management -->
+  <script type="module">
+  import { getCurrentUser, logout } from '/static/js/auth.js';
+
+  // Update navbar based on auth state
+  async function updateAuthUI() {
+      const user = await getCurrentUser();
+      const loggedInNav = document.getElementById('loggedInNav');
+      const loggedOutNav = document.getElementById('loggedOutNav');
+
+      if (user) {
+      loggedInNav.classList.remove('d-none');
+      loggedInNav.classList.add('d-flex');
+      loggedOutNav.classList.add('d-none');
+      loggedOutNav.classList.remove('d-flex');
+      document.getElementById('usernameDisplay').textContent = user.email;
+      } else {
+      loggedInNav.classList.add('d-none');
+      loggedInNav.classList.remove('d-flex');
+      loggedOutNav.classList.remove('d-none');
+      loggedOutNav.classList.add('d-flex');
+      }
+  }
+
+  // Logout handler
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  // Update UI on page load
+  updateAuthUI();
+  </script>
+
+
+  <!-- Create Review Form Handler -->
   <script type="module">
     import {
       getErrorMessage,
       showModal,
       hideModal
     } from "/static/js/utils.js";
+    import { getCurrentUser } from "/static/js/auth.js";
 
     const createReviewForm = document.getElementById("createReviewForm");
 
@@ -133,10 +185,13 @@
       const formData = new FormData(createReviewForm);
       const reviewData = Object.fromEntries(formData.entries());
 
-      // Temporary user ID until authentication is added
-      reviewData.user_id = 2;
-
       try {
+        const user = await getCurrentUser();
+        if (!user) {
+          window.location.assign("{{ url_for('login') }}");
+          return;
+        }
+        reviewData.user_id = user.id;
         const response = await fetch("/api/reviews", {
           method: "POST",
           headers: {
