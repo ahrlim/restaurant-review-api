@@ -117,6 +117,11 @@ async def register_page(request: Request):
     return templates.TemplateResponse(request, "register.html", {"title": "Register"})
 
 
+@app.get("/account", name="account")
+async def account_page(request: Request):
+    return templates.TemplateResponse(request, "account.html", {"title": "My Account"})
+
+
 @app.exception_handler(StarletteHTTPException)
 async def general_http_exception_handler(request: Request, exception: StarletteHTTPException):
     if request.url.path.startswith("/api"):

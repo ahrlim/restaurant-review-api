@@ -42,6 +42,7 @@
                   data-bs-toggle="modal"
                   data-bs-target="#createReviewModal">Create Review</button>
           <span id="usernameDisplay" class="navbar-text"></span>
+          <a class="btn btn-outline-primary" href="{{ url_for('account') }}">My Account</a>
           <button class="btn btn-outline-secondary"
                   type="button"
                   id="logoutBtn">Logout</button>
@@ -152,7 +153,7 @@
       loggedInNav.classList.add('d-flex');
       loggedOutNav.classList.add('d-none');
       loggedOutNav.classList.remove('d-flex');
-      document.getElementById('usernameDisplay').textContent = user.email;
+      document.getElementById('usernameDisplay').textContent = user.username;
       } else {
       loggedInNav.classList.add('d-none');
       loggedInNav.classList.remove('d-flex');
@@ -176,7 +177,7 @@
       showModal,
       hideModal
     } from "/static/js/utils.js";
-    import { getCurrentUser } from "/static/js/auth.js";
+    import { getCurrentUser, getToken, clearUserCache } from "/static/js/auth.js";
 
     const createReviewForm = document.getElementById("createReviewForm");
 
@@ -187,18 +188,25 @@
 
       try {
         const user = await getCurrentUser();
-        if (!user) {
+        const token = getToken();
+        if (!user || !token) {
           window.location.assign("{{ url_for('login') }}");
           return;
         }
-        reviewData.user_id = user.id;
         const response = await fetch("/api/reviews", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify(reviewData)
         });
+        if (response.status === 401) {
+          localStorage.removeItem("access_token");
+          clearUserCache();
+          window.location.assign("{{ url_for('login') }}");
+          return;
+        }
         if (response.ok) {
           document.getElementById("successMessage").textContent = "Review of " + reviewData.restaurant_name + " saved successfully.";
 

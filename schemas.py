@@ -40,7 +40,7 @@ class ReviewBase(BaseModel):
 
 
 class ReviewCreate(ReviewBase):
-    user_id: int = Field(gt=0)  # reviewer_id must be greater than 0
+    pass
     
 
 class ReviewUpdate(BaseModel):

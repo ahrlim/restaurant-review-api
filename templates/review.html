@@ -7,8 +7,7 @@
     <p>Visit Date: {{ review.date_visited.strftime('%Y-%m-%d') if review.date_visited else '-' }}</p>
     <p style="white-space: pre-wrap;">{{ review.review }}</p>
 
-    {% if review.user_id == 2 %}
-      <div class="post-actions mt-3 pt-3 border-top d-flex gap-2">
+      <div id="reviewActions" class="post-actions mt-3 pt-3 border-top d-none gap-2">
         <button type="button"
           class="btn btn-primary"
           data-bs-toggle="modal"
@@ -22,11 +21,9 @@
           Delete Review
         </button>
       </div>
-    {% endif %}
   </article>
 
 
-  {% if review.user_id == 2 %}
     <div class="modal fade" id="editReviewModal" tabindex="-1"
          aria-labelledby="editReviewModalLabel" aria-hidden="true">
       <div class="modal-dialog">
@@ -86,6 +83,14 @@
 
     <script type="module">
       import { getErrorMessage, showModal, hideModal } from "/static/js/utils.js";
+      import { getCurrentUser, getToken, clearUserCache } from "/static/js/auth.js";
+
+      const reviewActions = document.getElementById("reviewActions");
+      const currentUser = await getCurrentUser();
+      if (currentUser && currentUser.id === {{ review.user_id }}) {
+        reviewActions.classList.remove("d-none");
+        reviewActions.classList.add("d-flex");
+      }
 
       const editReviewForm = document.getElementById("editReviewForm");
       const editModal = document.getElementById("editReviewModal");
@@ -102,11 +107,26 @@
         updateData.review = updateData.review || null;
 
         try {
+          const token = getToken();
+          if (!token) {
+            window.location.assign("{{ url_for('login') }}");
+            return;
+          }
           const response = await fetch("/api/reviews/{{ review.id }}", {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
             body: JSON.stringify(updateData),
           });
+
+          if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            clearUserCache();
+            window.location.assign("{{ url_for('login') }}");
+            return;
+          }
 
           if (!response.ok) {
             const error = await response.json();
@@ -143,9 +163,22 @@
         confirmDeleteButton.disabled = true;
 
         try {
+          const token = getToken();
+          if (!token) {
+            window.location.assign("{{ url_for('login') }}");
+            return;
+          }
           const response = await fetch("/api/reviews/{{ review.id }}", {
             method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
           });
+
+          if (response.status === 401) {
+            localStorage.removeItem("access_token");
+            clearUserCache();
+            window.location.assign("{{ url_for('login') }}");
+            return;
+          }
 
           if (!response.ok) {
             const error = await response.json();
@@ -178,5 +211,4 @@
         }
       });
     </script>
-  {% endif %}
 {% endblock content %}
